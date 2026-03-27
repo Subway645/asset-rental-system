@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}入库 - 资产管理系统{% endblock %}
+{% block content %}
+<div class="container" style="max-width:700px">
+    <div class="card shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-plus-circle"></i> 资产入库（扫码入库）</h5>
+        </div>
+        <div class="card-body">
+            {% if simulate_mode %}
+            <div class="alert alert-warning">
+                <i class="bi bi-wifi-off"></i> <strong>模拟模式</strong>：无硬件连接，请在下方手动输入资产编号进行测试。
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-webcam"></i> 摄像头扫码模式：准备好资产上的二维码对准摄像头，或手动输入编号。
+            </div>
+            {% endif %}
+
+            <form method="POST" id="stockinForm">
+                <div class="mb-3">
+                    <label class="form-label">资产编号（二维码内容） <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" name="asset_code" id="assetCode" class="form-control"
+                               placeholder="{{ 'ASSET009' if simulate_mode else '对准摄像头扫描或手动输入' }}" required>
+                        {% if not simulate_mode %}
+                        <button type="button" class="btn btn-outline-primary" onclick="startScan()">
+                            <i class="bi bi-qr-code-scan"></i> 扫描
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="form-text">将资产上的二维码对准摄像头，或直接输入编号（如 ASSET001）</div>
+                </div>
+                <div id="scanPreview" class="text-center mb-3" style="display:none">
+                    <img id="previewImg" style="max-width:200px; border:2px solid #0d6efd; border-radius:8px;">
+                    <div class="mt-2 small text-muted">检测到二维码：<strong id="detectedCode"></strong></div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">资产名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required placeholder="例如：小米投影仪">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">分类</label>
+                        <input type="text" name="category" class="form-control" list="cat-list" placeholder="未分类">
+                        <datalist id="cat-list">
+                            <option value="笔记本电脑"><option value="投影设备">
+                            <option value="摄影器材"><option value="外设">
+                            <option value="平板电脑"><option value="工具">
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea name="description" class="form-control" rows="2" placeholder="可选"></textarea>
+                </div>
+
+                <div class="alert alert-secondary small">
+                    <i class="bi bi-info-circle"></i> 提交后将通过 STM32 硬件确认：
+                    请在 OLED 屏幕前按键 <span class="badge bg-success">确认</span> 或 <span class="badge bg-danger">取消</span>，
+                    30秒无操作将自动取消。
+                </div>
+
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold" id="submitBtn">
+                    <i class="bi bi-box-seam"></i> 提交入库申请
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let scannerActive = false;
+
+async function startScan() {
+    if (scannerActive) return;
+    scannerActive = true;
+    alert('请在摄像头前放置二维码（30秒超时）');
+    try {
+        const resp = await fetch('/api/scan/start', {method: 'POST'});
+        const data = await resp.json();
+        // 轮询扫码结果
+        pollScanResult();
+    } catch (e) {
+        alert('扫码启动失败: ' + e.message);
+        scannerActive = false;
+    }
+}
+
+async function pollScanResult() {
+    for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+            const resp = await fetch('/api/scan/result');
+            const data = await resp.json();
+            if (data.code) {
+                document.getElementById('assetCode').value = data.code;
+                document.getElementById('detectedCode').textContent = data.code;
+                document.getElementById('scanPreview').style.display = 'block';
+                scannerActive = false;
+                return;
+            }
+        } catch (e) {}
+    }
+    scannerActive = false;
+    alert('扫码超时');
+}
+</script>
+{% endblock %}

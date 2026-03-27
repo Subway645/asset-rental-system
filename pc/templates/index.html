@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}登录 - 资产管理系统{% endblock %}
+{% block extra_head %}
+<style>
+.login-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+}
+.login-card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="login-page d-flex align-items-center justify-content-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-5 col-lg-4">
+                <div class="card login-card p-4">
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <h3 class="fw-bold text-primary"><i class="bi bi-box-seam"></i> 资产管理系统</h3>
+                            <p class="text-muted small">请登录您的账号</p>
+                        </div>
+                        <form method="POST" action="{{ url_for('login') }}">
+                            <div class="mb-3">
+                                <label class="form-label">用户名</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input type="text" name="username" class="form-control" placeholder="请输入用户名" required autofocus>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label">密码</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                    <input type="password" name="password" class="form-control" placeholder="请输入密码" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+                                <i class="bi bi-box-arrow-in-right"></i> 登 录
+                            </button>
+                        </form>
+                        <div class="mt-4 p-3 bg-light rounded small text-muted">
+                            <strong>测试账号：</strong><br>
+                            管理员：admin / admin123<br>
+                            普通用户：zhangsan / user123
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

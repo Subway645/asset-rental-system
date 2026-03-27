@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}资产列表{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0"><i class="bi bi-list-ul"></i> 资产列表</h4>
+        <div>
+            <a href="{{ url_for('asset_stockin') }}" class="btn btn-success btn-sm">
+                <i class="bi bi-plus-circle"></i> 新加入库
+            </a>
+            <a href="{{ url_for('asset_new') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-patch-plus"></i> 手动新增
+            </a>
+        </div>
+    </div>
+
+    <!-- 筛选栏 -->
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input type="text" name="search" class="form-control" placeholder="搜索名称或编号..." value="{{ search }}">
+        </div>
+        <div class="col-md-2">
+            <select name="status" class="form-select">
+                <option value="">全部状态</option>
+                <option value="available" {% if status_filter=='available' %}selected{% endif %}>在库</option>
+                <option value="borrowed" {% if status_filter=='borrowed' %}selected{% endif %}>借出</option>
+                <option value="maintenance" {% if status_filter=='maintenance' %}selected{% endif %}>维护</option>
+                <option value="repair" {% if status_filter=='repair' %}selected{% endif %}>维修</option>
+                <option value="scrap" {% if status_filter=='scrap' %}selected{% endif %}>报废</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="category" class="form-select">
+                <option value="">全部分类</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if category_filter==cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-outline-primary w-100">
+                <i class="bi bi-search"></i> 筛选
+            </button>
+        </div>
+        <div class="col-md-1">
+            <a href="{{ url_for('asset_list') }}" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-x-lg"></i>
+            </a>
+        </div>
+    </form>
+
+    <!-- 资产表格 -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>资产编号</th>
+                            <th>名称</th>
+                            <th>分类</th>
+                            <th>状态</th>
+                            <th>描述</th>
+                            <th>入库时间</th>
+                            <th width="160">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for asset in assets %}
+                    <tr>
+                        <td><code>{{ asset.asset_code }}</code></td>
+                        <td class="fw-semibold">{{ asset.name }}</td>
+                        <td><span class="badge bg-secondary">{{ asset.category }}</span></td>
+                        <td>
+                            {% if asset.status == 'available' %}
+                                <span class="badge bg-success">在库</span>
+                            {% elif asset.status == 'borrowed' %}
+                                <span class="badge bg-warning text-dark">借出</span>
+                            {% elif asset.status == 'maintenance' %}
+                                <span class="badge bg-info text-dark">维护</span>
+                            {% elif asset.status == 'repair' %}
+                                <span class="badge bg-danger">维修</span>
+                            {% elif asset.status == 'scrap' %}
+                                <span class="badge bg-dark">报废</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ asset.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted text-truncate" style="max-width:200px">{{ asset.description or '-' }}</td>
+                        <td class="small text-muted">{{ asset.created_at[:10] }}</td>
+                        <td>
+                            {% if current_user.role == 'admin' %}
+                            <a href="{{ url_for('asset_edit', asset_id=asset.id) }}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteAsset({{ asset.id }}, '{{ asset.name }}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            暂无资产记录
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="small text-muted mt-2">共 {{ assets|length }} 条记录</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function deleteAsset(id, name) {
+    if (!confirm(`确定要删除资产「${name}」吗？`)) return;
+    fetch(`/assets/${id}/delete`, {method: 'POST'})
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) location.reload();
+            else alert('删除失败: ' + d.message);
+        });
+}
+</script>
+{% endblock %}

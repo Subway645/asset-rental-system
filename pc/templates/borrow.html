@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}借还 - 资产管理系统{% endblock %}
+{% block content %}
+<div class="container">
+    <h4 class="fw-bold mb-4"><i class="bi bi-arrow-repeat"></i> 资产借还</h4>
+
+    {% if simulate_mode %}
+    <div class="alert alert-warning mb-3">
+        <i class="bi bi-wifi-off"></i> <strong>模拟模式</strong>：硬件确认自动模拟（1.5秒后随机返回结果）
+    </div>
+    {% endif %}
+
+    <!-- 借出 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0"><i class="bi bi-arrow-up-right-circle"></i> 借出资产</h6>
+        </div>
+        <div class="card-body">
+            <form id="borrowForm" onsubmit="handleBorrow(event)">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">资产编号</label>
+                        <input type="text" id="borrowCode" class="form-control" placeholder="ASSET001" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">借期（天）</label>
+                        <input type="number" name="due_days" value="7" min="1" max="90" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">备注</label>
+                        <input type="text" name="note" class="form-control" placeholder="可选备注">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-box-arrow-right"></i> 借出
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <div id="borrowResult" class="mt-3" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- 归还 -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0"><i class="bi bi-arrow-down-left-circle"></i> 归还资产</h6>
+        </div>
+        <div class="card-body">
+            <form id="returnForm" onsubmit="handleReturn(event)">
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <label class="form-label">资产编号</label>
+                        <input type="text" id="returnCode" class="form-control" placeholder="ASSET001" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-box-arrow-left"></i> 归还
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <div id="returnResult" class="mt-3" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- 当前借出列表 -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h6 class="mb-0"><i class="bi bi-clock-history"></i> 当前借出记录</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>资产编号</th>
+                            <th>名称</th>
+                            <th>借用人</th>
+                            <th>借出时间</th>
+                            <th>应还日期</th>
+                            <th>硬件确认</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for record, asset, user in borrowed %}
+                    <tr>
+                        <td><code>{{ asset.asset_code }}</code></td>
+                        <td>{{ asset.name }}</td>
+                        <td>{{ user.name }}</td>
+                        <td class="small">{{ record.created_at[:16] }}</td>
+                        <td class="small {% if record.due_date and record.due_date < now_str %}text-danger fw-bold{% endif %}">
+                            {{ record.due_date[:10] if record.due_date else '-' }}
+                        </td>
+                        <td>
+                            {% if record.hw_confirmed %}
+                                <span class="badge bg-success">已确认</span>
+                            {% else %}
+                                <span class="badge bg-secondary">未确认</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">暂无借出记录</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function showResult(el, success, msg) {
+    el.style.display = 'block';
+    el.innerHTML = `<div class="alert alert-${success ? 'success' : 'danger'} py-2">${msg}</div>`;
+    if (success) {
+        setTimeout(() => { el.style.display = 'none'; location.reload(); }, 2000);
+    }
+}
+
+function handleBorrow(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = new FormData(form);
+    data.set('asset_code', document.getElementById('borrowCode').value);
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 等待硬件确认...';
+
+    fetch('/borrow/do', {method:'POST', body: data})
+        .then(r => r.json())
+        .then(d => {
+            showResult(document.getElementById('borrowResult'), d.success, d.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-box-arrow-right"></i> 借出';
+        })
+        .catch(() => {
+            showResult(document.getElementById('borrowResult'), false, '网络错误');
+            btn.disabled = false;
+        });
+}
+
+function handleReturn(e) {
+    e.preventDefault();
+    const form = e.target;
+    const data = new FormData(form);
+    data.set('asset_code', document.getElementById('returnCode').value);
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 等待硬件确认...';
+
+    fetch('/return/do', {method:'POST', body: data})
+        .then(r => r.json())
+        .then(d => {
+            showResult(document.getElementById('returnResult'), d.success, d.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-box-arrow-left"></i> 归还';
+        })
+        .catch(() => {
+            showResult(document.getElementById('returnResult'), false, '网络错误');
+            btn.disabled = false;
+        });
+}
+</script>
+{% endblock %}

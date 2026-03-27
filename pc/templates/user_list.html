@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}用户管理{% endblock %}
+{% block content %}
+<div class="container" style="max-width:800px">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0"><i class="bi bi-people"></i> 用户管理</h4>
+        <button class="btn btn-primary btn-sm" onclick="showAddUser()">
+            <i class="bi bi-person-plus"></i> 添加用户
+        </button>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>用户名</th>
+                            <th>姓名</th>
+                            <th>角色</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td><code>{{ user.username }}</code></td>
+                        <td>{{ user.name }}</td>
+                        <td>
+                            {% if user.role == 'admin' %}
+                                <span class="badge bg-primary">管理员</span>
+                            {% else %}
+                                <span class="badge bg-secondary">普通用户</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ user.created_at[:16] }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加用户模态框 -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加用户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">用户名</label>
+                    <input type="text" id="newUsername" class="form-control" placeholder="登录用">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">姓名</label>
+                    <input type="text" id="newName" class="form-control" placeholder="显示名称">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">密码</label>
+                    <input type="password" id="newPassword" class="form-control" placeholder="初始密码">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">角色</label>
+                    <select id="newRole" class="form-select">
+                        <option value="user">普通用户</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                <div id="addUserMsg" style="display:none" class="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="doAddUser()">
+                    <i class="bi bi-check-lg"></i> 添加
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const addUserModal = new bootstrap.Modal(document.getElementById('addUserModal'));
+
+function showAddUser() {
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newName').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('newRole').value = 'user';
+    document.getElementById('addUserMsg').style.display = 'none';
+    addUserModal.show();
+}
+
+function doAddUser() {
+    const username = document.getElementById('newUsername').value.trim();
+    const name = document.getElementById('newName').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const role = document.getElementById('newRole').value;
+
+    if (!username || !name || !password) {
+        showMsg('请填写所有字段', 'danger');
+        return;
+    }
+
+    const data = new FormData();
+    data.append('username', username);
+    data.append('name', name);
+    data.append('password', password);
+    data.append('role', role);
+
+    fetch('/users/new', {method: 'POST', body: data})
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                showMsg(d.message, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showMsg(d.message || '添加失败', 'danger');
+            }
+        });
+}
+
+function showMsg(msg, type) {
+    const el = document.getElementById('addUserMsg');
+    el.textContent = msg;
+    el.className = `alert alert-${type}`;
+    el.style.display = 'block';
+}
+</script>
+{% endblock %}

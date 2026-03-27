@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑资产' if asset else '新增资产' }}{% endblock %}
+{% block content %}
+<div class="container" style="max-width:640px">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-patch-plus"></i> {{ '编辑资产' if asset else '新增资产' }}</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('asset_new') if not asset else url_for('asset_edit', asset_id=asset.id) }}">
+                <div class="mb-3">
+                    <label class="form-label">资产名称 <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control" required value="{{ asset.name if asset else '' }}" placeholder="例如：联想ThinkPad笔记本">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">资产编号（二维码） <span class="text-danger">*</span></label>
+                    <input type="text" name="asset_code" class="form-control" required
+                           value="{{ asset.asset_code if asset else '' }}"
+                           placeholder="例如：ASSET001（将贴在此资产上）"
+                           {{ 'readonly' if asset else '' }}>
+                    <div class="form-text">全局唯一，建议使用大写字母+数字组合。此编号将生成二维码贴在资产上。</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">分类</label>
+                    <input type="text" name="category" class="form-control" list="category-list"
+                           value="{{ asset.category if asset else '' }}" placeholder="例如：笔记本电脑">
+                    <datalist id="category-list">
+                        <option value="笔记本电脑">
+                        <option value="投影设备">
+                        <option value="摄影器材">
+                        <option value="外设">
+                        <option value="平板电脑">
+                        <option value="工具">
+                        <option value="办公家具">
+                        <option value="其他">
+                    </datalist>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea name="description" class="form-control" rows="3" placeholder="可选，补充资产详细信息...">{{ asset.description if asset else '' }}</textarea>
+                </div>
+                {% if asset and current_user.role == 'admin' %}
+                <div class="mb-3">
+                    <label class="form-label">状态</label>
+                    <select name="status" class="form-select">
+                        <option value="available" {% if asset.status=='available' %}selected{% endif %}>在库（available）</option>
+                        <option value="borrowed" {% if asset.status=='borrowed' %}selected{% endif %}>借出（borrowed）</option>
+                        <option value="maintenance" {% if asset.status=='maintenance' %}selected{% endif %}>维护（maintenance）</option>
+                        <option value="repair" {% if asset.status=='repair' %}selected{% endif %}>维修（repair）</option>
+                        <option value="scrap" {% if asset.status=='scrap' %}selected{% endif %}>报废（scrap）</option>
+                    </select>
+                </div>
+                {% endif %}
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> 保存
+                    </button>
+                    <a href="{{ url_for('asset_list') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-lg"></i> 取消
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

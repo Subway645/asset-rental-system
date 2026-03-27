@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}资产管理系统{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-light">
+
+<!-- 顶部导航栏 -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm sticky-top">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">
+            <i class="bi bi-box-seam"></i> 资产管理系统
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'asset_list' %}active{% endif %}" href="{{ url_for('asset_list') }}">
+                        <i class="bi bi-list-ul"></i> 资产列表
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'asset_stockin' %}active{% endif %}" href="{{ url_for('asset_stockin') }}">
+                        <i class="bi bi-plus-circle"></i> 入库
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'borrow_page' %}active{% endif %}" href="{{ url_for('borrow_page') }}">
+                        <i class="bi bi-arrow-up-right-circle"></i> 借还
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'reports_page' %}active{% endif %}" href="{{ url_for('reports_page') }}">
+                        <i class="bi bi-exclamation-triangle"></i> 异常申报
+                        {% if open_overdue_count or open_damage_count %}
+                        <span class="badge bg-danger">{{ (open_overdue_count or 0) + (open_damage_count or 0) }}</span>
+                        {% endif %}
+                    </a>
+                </li>
+                {% if current_user.role == 'admin' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                        <i class="bi bi-bar-chart"></i> 数据看板
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'user_list' %}active{% endif %}" href="{{ url_for('user_list') }}">
+                        <i class="bi bi-people"></i> 用户管理
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+            <ul class="navbar-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle"></i> {{ current_user.name }}
+                        <span class="badge bg-light text-dark ms-1">{{ '管理员' if current_user.role == 'admin' else '普通用户' }}</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><span class="dropdown-item-text text-muted small">账号: {{ current_user.username }}</span></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                            <i class="bi bi-box-arrow-right"></i> 退出登录
+                        </a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- 模拟模式提示条 -->
+<div id="simulate-banner" class="alert alert-warning text-center mb-0 py-2" style="display:none;">
+    <i class="bi bi-wifi-off"></i> <strong>模拟模式</strong> — 当前无硬件连接，二维码需手动输入，硬件确认自动模拟
+    <a href="#" onclick="location.reload()" class="alert-link">刷新重试</a>
+</div>
+
+<!-- 主内容区 -->
+<main class="container-fluid py-4">
+    <!-- Flash 消息 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="container">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="text-center text-muted py-3 small border-top">
+    资产租借管理与可视化运营系统 &copy; 2026 &mdash; 基于 Flask + SQLite
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 检查硬件状态
+    async function checkHardware() {
+        try {
+            const resp = await fetch('/api/hardware/status');
+            const data = await resp.json();
+            const banner = document.getElementById('simulate-banner');
+            if (data.simulate_mode) {
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        } catch (e) {}
+    }
+    checkHardware();
+
+    // 通用的表单提交（AJAX）
+    async function submitForm(url, formData, onSuccess, onError) {
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams([...formData.entries()])
+            });
+            const data = await resp.json();
+            if (data.success) {
+                if (onSuccess) onSuccess(data);
+            } else {
+                if (onError) onError(data.message || '操作失败');
+                else alert('错误: ' + (data.message || '未知错误'));
+            }
+        } catch (e) {
+            alert('网络错误: ' + e.message);
+        }
+    }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

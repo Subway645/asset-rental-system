@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}异常申报{% endblock %}
+{% block content %}
+<div class="container">
+    <h4 class="fw-bold mb-4"><i class="bi bi-exclamation-triangle"></i> 异常申报</h4>
+
+    <div class="row g-4">
+        <!-- 逾期申报 -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="bi bi-clock-fill"></i> 逾期申报</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">当借出的资产超过应还日期仍未归还时，可提交逾期申报。</p>
+                    <form id="overdueForm" onsubmit="submitOverdue(event)">
+                        <div class="mb-3">
+                            <label class="form-label">选择借还记录</label>
+                            <select name="borrow_id" id="overdueBorrowId" class="form-select" required>
+                                <option value="">-- 选择 --</option>
+                                {% for record, asset, user in all_borrows %}
+                                <option value="{{ record.id }}">
+                                    {{ asset.asset_code }} - {{ asset.name }} ({{ user.name }}, 应还:{{ record.due_date[:10] if record.due_date else '无' }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">补充说明</label>
+                            <textarea name="note" class="form-control" rows="2" placeholder="可选"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-send"></i> 提交逾期申报
+                        </button>
+                    </form>
+                    <div id="overdueResult" class="mt-3" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 损坏申报 -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="bi bi-bandaid"></i> 损坏申报</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">发现资产损坏时，提交损坏申报，资产将自动进入"维修"状态。</p>
+                    <form id="damageForm" onsubmit="submitDamage(event)">
+                        <div class="mb-3">
+                            <label class="form-label">选择资产</label>
+                            <select name="asset_id" id="damageAssetId" class="form-select" required>
+                                <option value="">-- 选择 --</option>
+                                {% for asset in all_assets %}
+                                <option value="{{ asset.id }}">{{ asset.asset_code }} - {{ asset.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">损坏描述</label>
+                            <textarea name="description" class="form-control" rows="3" placeholder="请详细描述损坏情况..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-send"></i> 提交损坏申报
+                        </button>
+                    </form>
+                    <div id="damageResult" class="mt-3" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史申报记录（管理员可见） -->
+    {% if current_user.role == 'admin' %}
+    <div class="row g-4 mt-2">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger-subtle">
+                    <h6 class="mb-0">逾期申报记录</h6>
+                </div>
+                <ul class="list-group list-group-flush small">
+                {% for report, record, asset, user in overdues %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="badge bg-danger me-1">{{ asset.asset_code }}</span>
+                            {{ asset.name }}<br>
+                            <span class="text-muted">申报人: {{ user.name }} {{ report.report_date[:16] }}</span>
+                            {% if report.note %} <br><span class="text-muted">{{ report.note }}</span>{% endif %}
+                        </div>
+                        <div>
+                            {% if report.status == 'open' %}
+                                <span class="badge bg-danger">待处理</span>
+                                <button class="btn btn-sm btn-outline-danger mt-1" onclick="resolveOverdue({{ report.id }})">处理</button>
+                            {% else %}
+                                <span class="badge bg-success">已处理</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% else %}
+                    <li class="list-group-item text-muted text-center">暂无记录</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning-subtle">
+                    <h6 class="mb-0">损坏申报记录</h6>
+                </div>
+                <ul class="list-group list-group-flush small">
+                {% for report, asset, user in damages %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="badge bg-warning text-dark me-1">{{ asset.asset_code }}</span>
+                            {{ asset.name }}<br>
+                            <span class="text-muted">申报人: {{ user.name }} {{ report.created_at[:16] }}</span>
+                            <br><span class="text-muted">{{ report.description }}</span>
+                        </div>
+                        <div>
+                            {% if report.status == 'open' %}
+                                <span class="badge bg-warning text-dark">待处理</span>
+                                <button class="btn btn-sm btn-outline-warning mt-1" onclick="resolveDamage({{ report.id }})">处理</button>
+                            {% else %}
+                                <span class="badge bg-success">已处理</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% else %}
+                    <li class="list-group-item text-muted text-center">暂无记录</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 处理对话框 -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">处理申报</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">处理说明</label>
+                    <textarea id="resolveNote" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="mb-3" id="assetStatusGroup" style="display:none">
+                    <label class="form-label">资产新状态</label>
+                    <select id="assetNewStatus" class="form-select">
+                        <option value="available">在库</option>
+                        <option value="maintenance">维护</option>
+                        <option value="repair">维修</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="confirmResolve()">
+                    <i class="bi bi-check-lg"></i> 确认处理
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let pendingResolve = null;
+const resolveModal = new bootstrap.Modal(document.getElementById('resolveModal'));
+
+function submitOverdue(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    fetch('/reports/overdue', {method:'POST', body: form})
+        .then(r => r.json())
+        .then(d => {
+            const el = document.getElementById('overdueResult');
+            el.style.display = 'block';
+            el.innerHTML = `<div class="alert alert-${d.success ? 'success' : 'danger'} py-2">${d.message}</div>`;
+            if (d.success) e.target.reset();
+        });
+}
+
+function submitDamage(e) {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    fetch('/reports/damage', {method:'POST', body: form})
+        .then(r => r.json())
+        .then(d => {
+            const el = document.getElementById('damageResult');
+            el.style.display = 'block';
+            el.innerHTML = `<div class="alert alert-${d.success ? 'success' : 'danger'} py-2">${d.message}</div>`;
+            if (d.success) setTimeout(() => location.reload(), 1500);
+        });
+}
+
+function resolveOverdue(id) {
+    pendingResolve = {type: 'overdue', id};
+    document.getElementById('assetStatusGroup').style.display = 'none';
+    document.getElementById('resolveNote').value = '';
+    resolveModal.show();
+}
+
+function resolveDamage(id) {
+    pendingResolve = {type: 'damage', id};
+    document.getElementById('assetStatusGroup').style.display = 'block';
+    document.getElementById('resolveNote').value = '';
+    resolveModal.show();
+}
+
+function confirmResolve() {
+    const note = document.getElementById('resolveNote').value;
+    const data = new FormData();
+    data.append('resolution', note);
+    if (pendingResolve.type === 'damage') {
+        data.append('asset_status', document.getElementById('assetNewStatus').value);
+    }
+    fetch(`/reports/resolve/${pendingResolve.type}/${pendingResolve.id}`, {method:'POST', body: data})
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) location.reload();
+            else alert('处理失败: ' + d.message);
+        });
+}
+</script>
+{% endblock %}
