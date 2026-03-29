@@ -60,22 +60,26 @@ void MX_GPIO_Init(void)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* USART1 RX (PA10) - 浮空输入 */
-    GPIO_InitStruct.Pin  = GPIO_PIN_10;
-    GPIO_InitStruct.Mode = GPIO_MODE_IN_FLOATING;
+    GPIO_InitStruct.Pin   = GPIO_PIN_10;
+    GPIO_InitStruct.Mode  = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    /* I2C1 SCL (PB6) - 复用开漏 */
+    /* PB6 (SCL) - 软件I2C，GPIO开漏输出 */
     GPIO_InitStruct.Pin  = GPIO_PIN_6;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
 
-    /* I2C1 SDA (PB7) - 复用开漏 */
+    /* PB7 (SDA) - 软件I2C，GPIO开漏输出 */
     GPIO_InitStruct.Pin = GPIO_PIN_7;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
 
     /* 按键 (PA0-PA3) - 上拉输入，默认高电平，按下为低 */
-    GPIO_InitStruct.Pin  = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;
-    GPIO_InitStruct.Mode = GPIO_MODE_IPU;
+    GPIO_InitStruct.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;
+    GPIO_InitStruct.Mode  = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull  = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }

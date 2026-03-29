@@ -1,59 +1,57 @@
-# 办公室资产租借管理与可视化运营系统
+# 资产租借管理系统
 
-## 系统概述
-
-一套软硬件结合的资产租借管理系统。硬件端基于 STM32F103C8T6，通过 OLED 和按键与用户交互；PC 端提供 Web 前后端系统，实现资产入库、借出、归还全流程，并具备可视化运营看板。
+一套软硬件结合的资产租借管理系统。硬件端基于 STM32F103C8T6，通过 OLED 和按键与用户交互；PC 端提供 Web 系统，实现资产入库、借出、归还全流程，并具备可视化运营看板。
 
 ---
 
 ## 目录结构
 
 ```
-赛题/
-├── README.md               # 本文件
-├── requirements.txt        # Python 依赖
-├── init_db.py             # 数据库初始化脚本
+asset-rental-system/
+├── README.md                # 本文件
+├── requirements.txt         # Python 依赖
+├── init_db.py               # 数据库初始化
 │
-├── stm32/                 # ========== STM32 Keil5 工程 ==========
-│   ├── main.c / main.h    # 主程序入口 + 状态机
-│   ├── core.c / core.h    # 系统初始化（时钟、GPIO）
-│   ├── oled.c / oled.h    # OLED 驱动（SSD1306, I2C）
-│   ├── oled_font.c        # ASCII 8x16 点阵字模
-│   ├── button.c / button.h # 4按键扫描（消抖）
-│   └── serial.c / serial.h # USART1 串口收发中断
+├── stm32/                   # ===== STM32 Keil5 工程 =====
+│   ├── main.c / main.h      # 主程序 + 状态机
+│   ├── core.c / core.h      # 系统时钟 + GPIO 初始化
+│   ├── oled.c / oled.h      # OLED 驱动（SSD1306, I2C 软件模拟）
+│   ├── oled_font.c          # ASCII 8x16 点阵字模
+│   ├── button.c / button.h   # 4 按键扫描（消抖 + 10ms 定时）
+│   ├── serial.c / serial.h   # USART1 中断收发（9600bps）
+│   └── startup_stm32f103xb.s # 启动文件
 │
-└── pc/                    # ========== PC 端 Flask 应用 ==========
-    ├── app.py             # Flask 主程序（路由 + 模型）
+└── pc/                      # ===== PC 端 Flask Web 应用 =====
+    ├── app.py               # Flask 主程序（路由 + 数据库模型）
     ├── hardware/
-    │   ├── serial_comm.py # 串口通信（含模拟模式）
-    │   └── qr_scanner.py  # OpenCV 摄像头扫码
-    ├── templates/         # HTML 页面
-    │   ├── base.html      # Bootstrap 母版
-    │   ├── index.html     # 登录页
-    │   ├── asset_list.html
-    │   ├── asset_form.html
-    │   ├── asset_stockin.html
-    │   ├── borrow.html
-    │   ├── reports.html
-    │   ├── dashboard.html # ECharts 可视化看板
-    │   └── user_list.html
+    │   ├── serial_comm.py   # 串口通信（含自动模拟模式）
+    │   └── qr_scanner.py    # OpenCV 摄像头扫码
+    ├── templates/            # HTML 页面
+    │   ├── base.html         # Bootstrap 母版
+    │   ├── index.html        # 登录页
+    │   ├── asset_list.html   # 资产列表
+    │   ├── asset_form.html   # 新增/编辑资产
+    │   ├── borrow.html       # 借还操作
+    │   ├── reports.html      # 异常申报
+    │   ├── dashboard.html     # ECharts 可视化看板
+    │   └── user_list.html   # 用户管理
     └── static/
         └── style.css
 ```
 
 ---
 
-## 一、快速启动（PC 端，无需硬件即可运行）
+## 一、PC 端快速启动（无需硬件即可运行）
 
 ### 1. 安装 Python 依赖
 
 ```powershell
-cd C:\Users\Subway\Desktop\赛题
+cd C:\Users\Subway\Desktop\asset-rental-system
 python -m pip install -r requirements.txt
 ```
 
-> 如果安装 opencv-python 报错，尝试单独安装：
-> `pip install opencv-python-headless`（无需图形界面，适合服务器/无显示器环境）
+> opencv-python 安装失败时，改为：
+> `pip install opencv-python-headless`（无图形界面环境推荐）
 
 ### 2. 初始化数据库
 
@@ -61,9 +59,7 @@ python -m pip install -r requirements.txt
 python init_db.py
 ```
 
-运行后会创建 `pc/app.db` SQLite 数据库，并插入：
-- 3 个测试账号
-- 8 条示例资产数据
+运行后在 `pc/app.db` 生成 SQLite 数据库，包含 3 个测试账号和 8 条示例资产数据。
 
 ### 3. 启动 Web 服务
 
@@ -71,7 +67,7 @@ python init_db.py
 python pc/app.py
 ```
 
-浏览器打开 http://127.0.0.1:5000
+浏览器打开 **http://127.0.0.1:5000**
 
 | 角色 | 用户名 | 密码 |
 |------|--------|------|
@@ -79,117 +75,176 @@ python pc/app.py
 | 普通用户 | zhangsan | user123 |
 | 普通用户 | lisi | user123 |
 
-> **模拟模式**：PC 端检测到没有连接 STM32 时，会自动切换到模拟模式，硬件确认操作自动模拟（1.5秒后随机返回结果），无需硬件也能完整演示所有功能。
+> **模拟模式**：PC 端检测到未连接 STM32 时，自动切换模拟模式，硬件确认操作在 1.5 秒后自动返回结果，无需硬件即可完整演示。
 
 ---
 
-## 二、硬件接线说明（STM32 部分）
+## 二、硬件接线（ATK-MB000 BEE BLOCK）
 
-### 接线表
+本项目推荐使用 **正点原子 ATK-MB000 BEE BLOCK 仿真器**，一根 USB 线同时搞定烧录和串口通信。
 
-| STM32F103C8T6 | 外设 | 说明 |
-|---------------|------|------|
-| PA9  (USART1_TX) | → CP2102 RX | 串口发送 |
-| PA10 (USART1_RX) | → CP2102 TX | 串口接收 |
-| PB6  (I2C1_SCL)  | → OLED SCL | I2C 时钟 |
-| PB7  (I2C1_SDA)  | → OLED SDA | I2C 数据 |
-| PA0              | → 按键1（确认） | 一端接 PA0，一端接地 |
-| PA1              | → 按键2（取消） | 一端接 PA1，一端接地 |
-| PA2              | → 按键3（上翻） | 一端接 PA2，一端接地 |
-| PA3              | → 按键4（下翻） | 一端接 PA3，一端接地 |
-| 3.3V             | → OLED VCC, CP2102 VCC | 供电 |
-| GND              | → OLED GND, CP2102 GND, 所有按键 | 共地 |
-
-### CP2102 USB转TTL 模块连接 PC
+### BEE BLOCK 接口说明
 
 ```
-STM32 PA9  →  CP2102 RX
-STM32 PA10 →  CP2102 TX
-STM32 GND  →  CP2102 GND
-CP2102 USB →  PC USB
+  ┌──────────────────────────┐
+  │  USB ──────────────────────→ PC USB
+  │  SWD ──────────────────────→ STM32 SWD 接口
+  │  虚拟串口 ─────────────────→ STM32 USART1
+  │  3.3V/5V 供电输出 ────────→ 目标板电源（可选）
+  └──────────────────────────┘
 ```
 
-> 注意：STM32 和 CP2102 必须共地（否则串口通信异常）
+### 接线表（BEE BLOCK 全家桶接线）
+
+| STM32F103C8T6 | BEE BLOCK | 说明 |
+|--------------|-----------|------|
+| PA13 (SWDIO) | SWDIO | SWD 调试数据线 |
+| PA14 (SWCLK) | SWCLK | SWD 调试时钟线 |
+| GND | GND | 共地 |
+| PA9  (USART1_TX) | RXD（虚拟串口） | 串口发送 → BEE BLOCK 接收 |
+| PA10 (USART1_RX) | TXD（虚拟串口） | 串口接收 ← BEE BLOCK 发送 |
+| PB6  (I2C1_SCL)  | OLED SCL | I2C 时钟线 |
+| PB7  (I2C1_SDA)  | OLED SDA | I2C 数据线 |
+| PA0 | 按键1（确认） | 一端接 PA0，一端接地 |
+| PA1 | 按键2（取消） | 一端接 PA1，一端接地 |
+| PA2 | 按键3（上翻） | 一端接 PA2，一端接地 |
+| PA3 | 按键4（下翻） | 一端接 PA3，一端接地 |
+| 3.3V | OLED VCC | 供电 |
+
+> **BEE BLOCK 的 3.3V 输出接口**（按下 K1）可以直接给目标板供电，但最大 200mA，如目标板功耗较大请单独供电。
+
+### BEE BLOCK 指示灯含义
+
+| 灯 | 状态 | 含义 |
+|----|------|------|
+| STA 蓝灯 | 常亮 | USB 连接正常 |
+| STA 蓝灯 | 闪烁 | USB 未识别，检查驱动 |
+| STA 红灯 | 亮起 | 正在下载或程序运行中 |
+| TXD（绿） | 闪烁 | 串口正在发送数据 |
+| RXD（蓝） | 闪烁 | 串口正在接收数据 |
+| DS1（红） | 常亮 | 3.3V 电源输出已开启 |
+| DS2（红） | 常亮 | 5V 电源输出已开启 |
 
 ---
 
-## 三、Keil5 工程创建步骤
+## 三、STM32 固件烧录（BEE BLOCK）
 
-> 如果你之前有用 CubeMX 生成代码的经验，可以用 CubeMX 来初始化外设。以下是纯寄存器/CubeMX 混用的方式。
+### 3.1 Keil 配置（CMSIS-DAP Debugger）
 
-### 步骤 1：新建 Keil5 工程
+> 只需要配置一次，之后直接点 Download 即可烧录，无需跳线和 BOOT0 设置。
 
-1. Keil5 → Project → New uVision Project → 选择 `stm32/` 文件夹
-2. 芯片选型：`STM32F103C8`
-3. 弹出管理运行时环境：只勾选 `CORE`，其他取消 → OK
+1. **Project → Options for Target → Debug**
+   - 选 **CMSIS-DAP Debugger**
+   - 点右侧 **Settings**：
+     - `CMSIS-DAP-JTAG/SW Adapter` → 选 **ATK-CMSIS-DAP**
+     - 勾 **SWJ**
+     - **Port** → **SW**
+     - **Reset** → **SYSRESETREQ**
+     - **Max Clock** → 先用 **1MHz**（不稳定时可降到 100kHz）
 
-### 步骤 2：添加源文件
+2. 切换到 **Flash Download**：
+   - 添加 `STM32F103C8` 下载算法
+   - 勾选 **Reset and Run**
 
-将 `stm32/` 下的所有 `.c` 和 `.h` 文件拖入 Keil 左侧 Project 窗口。
+3. 点 **OK** 保存
 
-### 步骤 3：配置 Target
+4. 点击 Keil 工具栏 **Download**（或 F8）开始烧录
 
-1. Project → Options for Target
-2. **C/C++** → **Define**: `USE_HAL_LIBRARY,STM32F103xB`
-3. **C/C++** → **Include Paths**: 添加 `stm32/` 和 `C:\Keil_v5\ARM\PACK\Keil\STM32F1xx_DFP\2.2.0\Device\Include`（路径根据实际安装位置）
-4. **Debug** → 使用 **ST-Link Debugger** → Settings → Port 选 **SWD**
-5. **Utilities** → 勾选 "Update Target before Debugging"
+### 3.2 验证运行
 
-### 步骤 4：添加 HAL 库
+烧录完成后 OLED 应立即显示：
 
-如果没有使用 CubeMX，需要手动添加 STM32F1xx HAL 库文件到工程：
-- `stm32f1xx_hal.c`
-- `stm32f1xx_hal_uart.c`
-- `stm32f1xx_hal_i2c.c`
-- `stm32f1xx_hal_gpio.c`
-- `stm32f1xx_hal_rcc.c`
-- `stm32f1xx_hal_tim.c`
-- `stm32f1xx_hal_cortex.c`
-- `startup_stm32f103xb.s`（启动文件）
+```
+=== Asset Mgmt Sys ===
+System Ready
+Waiting for PC...
+BTN1:OK  BTN2:Cancel
+```
 
-> **推荐方式**：使用 CubeMX 生成初始化代码，然后用本项目的 `main.c` 替换主逻辑。按键、OLED、串口初始化代码可以直接复制使用。
+> 注意：烧录时目标板需要有电（BEE BLOCK 按 K1 输出 3.3V 供电，或目标板单独供电）。
 
-### 步骤 5：编译与下载
+### 3.3 设备管理器中的 COM 口
 
-1. 点击 **Rebuild** 编译
-2. 点击 **Download** 烧录
-3. 连接 ST-Link，PC 端 Flask 打开串口连接
-
----
-
-## 四、工作流程演示
-
-### 入库流程
-
-1. 管理员登录 Web 系统
-2. 进入「入库」页面，输入资产编号（如 `ASSET009`）和名称
-3. 点击「提交入库申请」
-4. PC 端通过串口发送 `IN,ASSET009\n` 到 STM32
-5. STM32 OLED 显示：「入库确认 / 资产: ASSET009 / 倒计时: 30秒」
-6. 用户按「确认」键 → STM32 返回 `OK,ASSET009,20260327143052\n`
-7. PC 端收到确认，数据库状态更新为「在库」
-8. Web 页面显示成功
-
-### 借出流程
-
-1. 任何人登录 → 「借还」页面 → 输入资产编号 → 借出
-2. STM32 显示：「借出确认 / 资产: ASSET001 / 倒计时」
-3. 用户按「确认」 → 返回 OK → 数据库更新为「借出」状态
-
-### 归还流程
-
-1. 任何人登录 → 「借还」页面 → 输入资产编号 → 归还
-2. STM32 显示：「归还确认」 → 用户确认 → 返回 OK → 数据库更新为「在库」
-
-### 异常申报
-
-1. 逾期：选择借出记录，填写说明，提交申报
-2. 损坏：选择资产，描述损坏情况，提交后资产自动进入「维修」状态
-3. 管理员可在「异常申报」页面处理（填写处理结果，设置资产新状态）
+BEE BLOCK 插上后，设备管理器会出现 **两个 COM 口**：
+- **COMx（CMSIS-DAP）** — 烧录用（自动使用，不需要手动选）
+- **COMy（USB Serial）** — 虚拟串口，PC 端软件连接时选这个
 
 ---
 
-## 五、通信协议详解
+## 四、备选烧录方式：串口 Bootloader（无仿真器时）
+
+> 若只有 CP2102 / CH340 等 USB 转串口模块，没有仿真器，可用此方式烧录。
+
+### 4.1 准备工具
+
+下载 ST 官方免费工具 **STM32 Flash Loader Demonstrator**：
+https://www.st.com/content/st_com/en/products/development-tools/software-development-tools/stm32-software-development-tools/stm32-programmers/fl-stm32flashloaderexp.html
+
+### 4.2 设置 Boot 跳线
+
+1. 断开电源
+2. 将 **BOOT0** 跳线帽插到 **3.3V**（切换到 System Memory 启动模式）
+3. 连接 CP2102（TX/RX/GND）
+4. 上电
+
+### 4.3 烧录
+
+1. 运行 Flash Loader Demonstrator
+2. 选择 CP2102 对应的 COM 口，波特率选 **115200**
+3. 一路 Next，确认芯片型号
+4. 选择固件：`stm32/Objects/STM32.hex`
+5. 点击 Next 开始烧录
+6. 烧录完成后断电，将 **BOOT0 跳线帽插回 GND**
+7. 重新上电即可运行
+
+---
+
+## 五、Keil5 工程配置说明
+
+> 如果只是烧录运行，不需要修改代码，跳过本节即可。
+
+### Keil5 参数配置（与本工程一致）
+
+| 设置项 | 值 |
+|--------|-----|
+| Target → Crystal | 8.000 |
+| C/C++ → Define | `USE_HAL_LIBRARY,STM32F103xB` |
+| C/C++ → Include Paths | `stm32/`（根据 Keil 安装位置补充 Pack 路径） |
+| Debug → Driver | **CMSIS-DAP Debugger**（使用 BEE BLOCK 时选此项）|
+| Debug → Settings → Port | **SW** |
+| Debug → Settings → Adapter | **ATK-CMSIS-DAP** |
+| Debug → Settings → Max Clock | **1MHz**（不稳定时可降低） |
+| Flash Download → Algorithm | 添加 `STM32F103C8` 下载算法 |
+| Utilities → Update Target | 勾选 |
+
+### HAL 驱动文件清单
+
+| 文件 | 说明 |
+|------|------|
+| `stm32f1xx_hal.c` | HAL 核心 |
+| `stm32f1xx_hal_uart.c` | USART 驱动 |
+| `stm32f1xx_hal_i2c.c` | I2C 驱动 |
+| `stm32f1xx_hal_gpio.c` | GPIO 驱动 |
+| `stm32f1xx_hal_rcc.c` | 时钟驱动 |
+| `stm32f1xx_hal_tim.c` | 定时器驱动 |
+| `stm32f1xx_hal_tim_ex.c` | 定时器扩展驱动 |
+| `stm32f1xx_hal_cortex.c` | Cortex-M3 内核驱动 |
+| `stm32f1xx_hal_flash.c` | Flash 驱动 |
+| `stm32f1xx_hal_flash_ex.c` | Flash 扩展 |
+| `stm32f1xx_hal_dma.c` | DMA 驱动 |
+| `stm32f1xx_hal_pwr.c` | 电源管理 |
+| `stm32f1xx_hal_exti.c` | 外部中断 |
+| `system_stm32f1xx.c` | SystemInit |
+| `startup_stm32f103xb.s` | 启动文件 |
+
+### 编译输出
+
+- `.axf` — Keil 调试文件
+- `.hex` — 用于串口 Bootloader 烧录：`stm32/Objects/STM32.hex`（使用 BEE BLOCK 时不需要，Keil 直接通过 SWD 烧录）
+
+---
+
+## 五、通信协议
 
 ### PC → STM32
 
@@ -206,65 +261,115 @@ CP2102 USB →  PC USB
 |------|------|------|
 | 确认 | `OK,<asset_code>,<timestamp>\n` | 用户按了确认 |
 | 取消 | `NO,<asset_code>,<timestamp>\n` | 用户按了取消 |
-| 超时 | `TIMEOUT,<asset_code>\n` | 30秒无操作 |
+| 超时 | `TIMEOUT,<asset_code>\n` | 30 秒无操作 |
 | 心跳回复 | `PONG\n` | 连接正常 |
 
-### 波特率
+### 串口参数
 
-- 9600 bps，8 数据位，1 停止位，无校验
-
----
-
-## 六、可视化看板说明
-
-进入「数据看板」（仅管理员可见），包含：
-
-1. **KPI 卡片**：资产总数、在库数量、当前借出、逾期数量
-2. **资产状态分布饼图**：在库/借出/维修/报废占比
-3. **近30天借用趋势折线图**：每天借出次数
-4. **各类别资产数量柱状图**：按分类统计
-5. **借用频次 Top 10**：最受欢迎的资产排行
-6. **硬件确认率**：所有操作中硬件确认通过的比例
-7. **操作日志**：最近20条系统操作记录
+- **波特率**：9600 bps
+- **数据位**：8
+- **停止位**：1
+- **校验**：无
 
 ---
 
-## 七、常见问题排查
+## 六、系统使用流程
+
+### 入库
+
+1. 管理员登录 Web → 「资产入库」→ 输入编号（如 ASSET009）和名称 → 提交
+2. STM32 OLED 显示：
+   ```
+   ====== 确认 ======
+   >>> 入库确认 <<<
+   资产: ASSET009
+   CntDwn: 30 s
+   ```
+3. 用户按 **BTN1（确认）** → OLED 显示 `[OK] Confirmed!`（2秒）→ 自动返回
+4. PC 端收到 `OK` → 数据库状态更新为"在库"
+
+### 借出
+
+1. 登录 Web → 「借还」→ 输入资产编号 → 借出
+2. STM32 显示 `>>> 借出确认 <<<`
+3. 用户确认 → 数据库更新为"借出"
+
+### 归还
+
+1. 登录 Web → 「借还」→ 输入资产编号 → 归还
+2. STM32 显示 `>>> 归还确认 <<<`
+3. 用户确认 → 数据库更新为"在库"
+
+### 超时
+
+30 秒无按键操作，STM32 自动返回 `TIMEOUT`，PC 端取消操作。
+
+---
+
+## 七、OLED 屏幕内容一览
+
+| 场景 | 第0行 | 第2行 | 第4行 | 第6行 |
+|------|-------|-------|-------|-------|
+| 主界面 | === Asset Mgmt Sys === | System Ready | Waiting for PC... | BTN1:OK  BTN2:Cancel |
+| 入库确认 | ====== 确认 ====== | >>> 入库确认 <<< | 资产: ASSET009 | CntDwn: 25 s |
+| 借出确认 | ====== 确认 ====== | >>> 借出确认 <<< | 资产: ASSET009 | CntDwn: 25 s |
+| 归还确认 | ====== 确认 ====== | >>> 归还确认 <<< | 资产: ASSET009 | CntDwn: 25 s |
+| 确认成功 | ==== [OK] ==== | Confirmed! | — | — |
+| 取消 | ==== [CANCEL] ==== | Cancelled! | — | — |
+| 超时 | == [TIMEOUT] == | Timeout! | — | — |
+
+---
+
+## 九、常见问题排查
+
+### Keil 提示"No CMSIS-DAP Device found"
+
+- 检查 BEE BLOCK 是否已通过 USB 连接电脑
+- 检查设备管理器中是否出现 BEE BLOCK 设备（无驱动时需手动安装）
+- Win7 可能需要手动安装驱动；Win8/10/11 一般自动识别
+- 驱动下载：正点原子官网或设备管理器右键 → 更新驱动
 
 ### PC 端提示"串口无法打开"
 
-- 检查 CP2102 驱动是否安装（设备管理器中是否识别为 COM 端口）
-- 检查 USB 线是否支持数据通信（部分 USB 线仅供电）
-- 确认 STM32 串口 TX/RX 没有接反（PA9→CP2102 RX, PA10→CP2102 TX）
-- 无硬件时系统会自动进入模拟模式，不影响演示
+- 确认使用的是 BEE BLOCK 的 **USB Serial（虚拟串口）** COM 口（设备管理器里第二个 COM）
+- 不要选 CMSIS-DAP 那个 COM，那是烧录用的
+- USB 线是否支持数据通信（部分线只能充电）
+- TX/RX 是否接反（STM32 PA9 → BEE BLOCK RXD，PA10 → BEE BLOCK TXD）
+- 无硬件时 PC 端会自动进入模拟模式，不影响演示
 
 ### OLED 不显示
 
-- 检查 OLED 的 SCL（PB6）和 SDA（PB7）接线是否正确
-- 确认 OLED 模块是 I2C 接口（而非 SPI）
-- 检查 OLED 供电是否为 3.3V（有些模块是 5V，接 3.3V 可能亮度不够）
-- 可以在 OLED_Init() 前加 HAL_Delay(500) 增加上电等待时间
+- 检查 PB6（接 SCL）和 PB7（接 SDA）接线
+- 确认 OLED 是 I2C 接口（而非 SPI）
+- 确认 OLED 供电为 3.3V
+- 上电后等待 500ms 再初始化（OLED_Init 前加 `HAL_Delay(500)`）
 
 ### STM32 串口无响应
 
-- 确认 PC 端串口参数：9600, 8N1
-- 检查 STM32 和 CP2102 共地
-- 在 Serial_Init() 中加入断点，确认初始化顺序正确
-- 可以在 PC 端用串口调试助手（如 SSCOM）直接发送命令测试
+- PC 端串口参数：9600, 8N1
+- BEE BLOCK 和 STM32 是否共地（GND 相连）
+- 用串口调试助手（如 SSCOM）直接发送 `PING\n` 测试
 
-### Keil 编译报错找不到 stm32f1xx_hal.h
+### Keil 编译报错
 
-- 需要添加 STM32F1 HAL 库文件，或在 CubeMX 中重新生成代码框架
-- 确保 Keil 中安装了 ARM::CMSIS 和 Keil::STM32F1xx_DFP -Pack
+- 确认 `USE_HAL_LIBRARY,STM32F103xB` 两个宏都填入 Define 框
+- Include Paths 中需包含 `stm32/` 目录
+- HAL 头文件版本需与 .c 源文件版本一致（不混用不同版本的 HAL）
+
+### 烧录时识别不到芯片 IDCODE
+
+- 将 Max Clock 降低到 100kHz 或 1MHz 再试
+- 检查 SWDIO / SWCLK 接线是否正确（注意不是接在 PA9/PA10 上）
+- 确保目标板已供电（BEE BLOCK K1 开启 3.3V 输出，或单独供电）
 
 ---
 
-## 八、竞赛加分项（可选实现）
+## 九、后续扩展方向
 
-- [ ] 将 SQLite 替换为 MySQL，支持多用户并发
-- [ ] 添加资产二维码生成功能（PC端生成二维码图片打印贴附）
-- [ ] 添加短信/邮件通知（资产逾期自动提醒）
-- [ ] 添加操作记录导出Excel功能
-- [ ] STM32 添加指示灯（不同颜色表示不同操作）
+- [ ] 接入 MySQL，支持多用户并发操作
+- [ ] PC 端生成资产二维码并打印贴附
+- [ ] 逾期自动短信/邮件提醒
+- [ ] 操作日志导出 Excel
+- [ ] 添加状态指示灯（不同颜色代表不同操作）
 - [ ] 添加借期续借功能
-- [ ] 使用 WiFi 模块（ESP8266/ESP32）替代 USB 串口，实现无线通信
+- [ ] 换用 ESP8266/ESP32 WiFi 模块替代 USB 串口

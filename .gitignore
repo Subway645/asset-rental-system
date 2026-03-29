@@ -1,0 +1,32 @@
+# ========== 忽略大文件 ==========
+# STM32Cube SDK（太大，不上传）
+STM32CubeF1-1.8.7/
+cmsis_device.zip
+hal_driver.zip
+cmsis_temp/
+hal_temp/
+stm32cube.zip
+*.zip
+
+# ========== Keil MDK 构建产物 ==========
+stm32/Listings/
+stm32/Objects/
+stm32/DebugConfig/
+stm32/RTE/
+
+# ========== IDE 文件 ==========
+.vscode/
+stm32/STM32.uvguix.*
+stm32/STM32.uvoptx
+stm32/STM32.uvprojx
+
+# ========== Python ==========
+__pycache__/
+*.pyc
+*.pyo
+*.db
+hardware/__pycache__/
+
+# ========== 其他 ==========
+*.bak
+*.tmp

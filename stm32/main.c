@@ -31,8 +31,8 @@
 #include <stdio.h>
 
 // =============== 全局变量 ===============
-I2C_HandleTypeDef hi2c1;   // I2C1 句柄（OLED用，软件模拟或硬件I2C）
 UART_HandleTypeDef huart1;  // USART1 句柄（串口通信）
+I2C_HandleTypeDef hi2c1;    // I2C1 句柄（OLED用）
 
 // 状态机
 typedef enum {
@@ -99,10 +99,8 @@ void USART1_IRQHandler(void)
 static void ShowIdleScreen(void)
 {
     OLED_Clear();
-    OLED_ShowLine(0, "=== 资产管理系统 ===");
-    OLED_ShowLine(2, "系统就绪");
-    OLED_ShowLine(4, "等待PC发送命令...");
-    OLED_ShowLine(6, "BTN1:确认  BTN2:取消");
+    OLED_ShowLine(0, "=== Asset Sys ===");
+    OLED_ShowLine(1, "System Ready");
     OLED_Refresh();
 }
 
@@ -143,7 +141,6 @@ static void HandleWaitConfirmState(void)
     Button_Update();
 
     // 检测按键
-    Button_ID pressed = BTN_NONE;
 
     // 实时倒计时显示（每秒更新一次）
     uint32_t elapsed = (HAL_GetTick() - g_confirm_start_tick) / 1000;
@@ -195,14 +192,14 @@ int main(void)
     MX_GPIO_Init();
 
     // 外设初始化
-    MX_I2C1_Init();
-    MX_USART1_Init();
-    MX_TIM2_Init();
+    MX_USART1_Init();   // USART1（串口通信，Serial_Init 依赖它）
+    MX_TIM2_Init();     // TIM2（按键扫描，10ms 周期中断）
 
-    // 模块初始化
-    OLED_Init();
     Button_Init();
     Serial_Init();
+
+    // OLED 使用软件I2C，无需额外初始化（在 OLED_Init() 中已处理）
+    OLED_Init();
 
     // 启动定时器2（用于按键扫描，10ms周期）
     HAL_TIM_Base_Start_IT(&htim2);

@@ -110,7 +110,6 @@ static bool ParseCommand(const char *line)
     if (strlen(line) < 3) return false;
 
     char cmd[8] = {0};
-    char code[64] = {0};
 
     // 查找逗号
     const char *comma = strchr(line, ',');
