@@ -140,14 +140,15 @@ static void HandleWaitConfirmState(void)
     // 更新按键状态
     Button_Update();
 
-    // 检测按键
-
-    // 实时倒计时显示（每秒更新一次）
+    // 实时倒计时（每秒刷新一次屏幕，避免I2C过载）
     uint32_t elapsed = (HAL_GetTick() - g_confirm_start_tick) / 1000;
+    static uint32_t last_sec = 999;  // 初始化为一个不可能的值
     if (elapsed < 30) {
-        uint8_t sec = (uint8_t)(30 - elapsed);
-        // 每秒刷新一次倒计时（OLED函数会刷新）
-        OLED_ShowConfirmUI(g_pending_action, g_pending_asset, sec);
+        if (elapsed != last_sec) {
+            last_sec = elapsed;
+            uint8_t sec = (uint8_t)(30 - elapsed);
+            OLED_ShowConfirmUI(g_pending_action, g_pending_asset, sec);
+        }
     }
 
     // 检查按键
@@ -198,8 +199,15 @@ int main(void)
     Button_Init();
     Serial_Init();
 
-    // OLED 使用软件I2C，无需额外初始化（在 OLED_Init() 中已处理）
+    // OLED 使用软件I2C，无需 I2C1 硬件外设（PB6/PB7 由 OLED_Init 单独配置为GPIO开漏）
     OLED_Init();
+
+    // 调试打印：OLED 初始化检查（通过 UART 输出）
+    char dbgbuf[128];
+    int dbglen = snprintf(dbgbuf, sizeof(dbgbuf),
+        "[DBG] OLED_DBG_CNT=%lu OLED_I2C_BYTES=%lu\r\n",
+        (unsigned long)OLED_DBG_CNT, (unsigned long)OLED_I2C_BYTES);
+    HAL_UART_Transmit(&huart1, (uint8_t*)dbgbuf, dbglen, 100);
 
     // 启动定时器2（用于按键扫描，10ms周期）
     HAL_TIM_Base_Start_IT(&htim2);
@@ -225,6 +233,17 @@ int main(void)
                 ShowIdleScreen();
                 g_idle_start_tick = HAL_GetTick();
             }
+        }
+
+        // 调试：每5秒通过 UART 打印 OLED 计数器（验证 OLED 是否持续工作）
+        static uint32_t last_dbg_tick = 0;
+        if (HAL_GetTick() - last_dbg_tick > 5000) {
+            last_dbg_tick = HAL_GetTick();
+            char dbgbuf[128];
+            int dbglen = snprintf(dbgbuf, sizeof(dbgbuf),
+                "[DBG] OLED_DBG_CNT=%lu OLED_I2C_BYTES=%lu\r\n",
+                (unsigned long)OLED_DBG_CNT, (unsigned long)OLED_I2C_BYTES);
+            HAL_UART_Transmit(&huart1, (uint8_t*)dbgbuf, dbglen, 100);
         }
 
         // 小的延时，防止CPU空转

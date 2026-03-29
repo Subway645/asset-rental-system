@@ -40,9 +40,9 @@ void SystemClock_Config(void)
  * @brief  初始化所有GPIO
  *  PA9  = USART1_TX  (复用推挽输出)
  *  PA10 = USART1_RX  (浮空输入)
- *  PB6  = I2C1_SCL   (复用开漏输出)
- *  PB7  = I2C1_SDA   (复用开漏输出)
  *  PA0-PA3 = 按键1-4  (上拉输入)
+ *  注意：PB6/PB7 不在 MX_GPIO_Init 中处理，
+ *        由 OLED_Init 单独配置，避免与硬件 I2C1 引脚冲突
  */
 void MX_GPIO_Init(void)
 {
@@ -64,18 +64,6 @@ void MX_GPIO_Init(void)
     GPIO_InitStruct.Mode  = GPIO_MODE_INPUT;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    /* PB6 (SCL) - 软件I2C，GPIO开漏输出 */
-    GPIO_InitStruct.Pin  = GPIO_PIN_6;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-
-    /* PB7 (SDA) - 软件I2C，GPIO开漏输出 */
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
 
     /* 按键 (PA0-PA3) - 上拉输入，默认高电平，按下为低 */
     GPIO_InitStruct.Pin   = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;

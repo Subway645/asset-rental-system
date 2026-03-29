@@ -9,6 +9,10 @@
 #include <string.h>
 #include "stm32f1xx_hal.h"
 
+/* 调试计数器（main.c 可读取并通过 UART 打印）*/
+extern volatile uint32_t OLED_DBG_CNT;
+extern volatile uint32_t OLED_I2C_BYTES;
+
 /* 初始化 */
 void OLED_Init(void);
 

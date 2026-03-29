@@ -1,46 +1,57 @@
 /**
  * @file    oled.c
- * @brief   OLED 驱动（SSD1306，软件I2C）
- *          基于中景园例程，完全复制，逐行对照
- *          PB6=SCL, PB7=SDA（4针I2C模块，无RES）
- *          0.91寸 OLED 专用
+ * @brief   OLED 驱动（SSD1306，软件I2C，PB6=SCL / PB7=SDA）
+ *          直接操作 BSRR/BRR 寄存器，不依赖 HAL，避免 I2C1 复用冲突
+ *          完全对照中景园例程风格
  */
 #include "oled.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
-// =============== 软件 I2C GPIO 定义 ===============
-// PB6 = SCL, PB7 = SDA
-
-#define OLED_SCL_Clr()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET)
-#define OLED_SCL_Set()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET)
-
-#define OLED_SDA_Clr()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET)
-#define OLED_SDA_Set()  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET)
-
-#define OLED_RES_Clr()  /* 无RES引脚，空定义 */
-#define OLED_RES_Set()  /* 无RES引脚，空定义 */
-
+// =============== 宏定义 ===============
+// 直接操作 BSRR/BRR 寄存器（对照例程的 GPIO_SetBits/GPIO_ResetBits）
+#define OLED_SCL_Clr()   (GPIOB->BRR = GPIO_PIN_6)   // PB6 = 0
+#define OLED_SCL_Set()   (GPIOB->BSRR = GPIO_PIN_6)  // PB6 = 1
+#define OLED_SDA_Clr()   (GPIOB->BRR = GPIO_PIN_7)   // PB7 = 0
+#define OLED_SDA_Set()   (GPIOB->BSRR = GPIO_PIN_7) // PB7 = 1
+#define OLED_RES_Clr()   /* 4针模块无RES */
+#define OLED_RES_Set()   /* 4针模块无RES */
 #define OLED_CMD  0
 #define OLED_DATA 1
 
-// =============== GRAM（显存） ===============
-// 0.91寸: 128x32 -> 4 pages x 128 columns
+// I2C 地址：0x7A (部分0.91寸模块用这个地址，0x78不响应时请试这个)
+#define OLED_I2C_ADDR  0x7A
+
+// 0.91寸: 128列 x 32行 -> 4页
 #define OLED_WIDTH   128
 #define OLED_HEIGHT  32
 #define OLED_PAGE    4
 
-static uint8_t OLED_GRAM[OLED_WIDTH][OLED_PAGE];  // [列][页]
+// =============== 调试计数器（供 main.c 通过 UART 打印）===============
+// 记录顺序：init_enter, gpio_ok, cmd_AE, AF, clear, refresh_call, refresh_done, wr_byte, send_byte, show_confirm, show_result, confirm_refresh, result_refresh
+extern volatile uint32_t OLED_DBG_CNT;
+volatile uint32_t OLED_DBG_CNT = 0;
+#define DBG_INC(n) do { OLED_DBG_CNT = (n); } while(0)
 
-// =============== 内部延时 ===============
+// 单独计数：I2C发送字节数
+volatile uint32_t OLED_I2C_BYTES = 0;
+#define DBG_BYTE() do { OLED_I2C_BYTES++; } while(0)
 
+// =============== GRAM ===============
+static uint8_t OLED_GRAM[OLED_WIDTH][OLED_PAGE];
+
+// =============== 基础延时（对照例程）===============
+// 72MHz CPU：1次循环约4个周期(4/72e6≈55ns)
+// t=100 -> ~5.5us（满足I2C标准速率）
+// t=10  -> ~550ns（快速模式）
 static void IIC_Delay(void)
 {
-    uint8_t t = 10;
+    uint8_t t = 100;
     while (t--);
 }
 
-// =============== I2C 模拟时序 ===============
+// =============== I2C 模拟时序（对照例程）===============
 
 static void I2C_Start(void)
 {
@@ -88,12 +99,13 @@ static void Send_Byte(uint8_t dat)
         dat <<= 1;
         IIC_Delay();
     }
+    DBG_BYTE();
 }
 
 static void OLED_WR_Byte(uint8_t dat, uint8_t mode)
 {
     I2C_Start();
-    Send_Byte(0x78);   // I2C 从机地址
+    Send_Byte(OLED_I2C_ADDR);
     I2C_WaitAck();
     if (mode) {
         Send_Byte(0x40);
@@ -108,38 +120,38 @@ static void OLED_WR_Byte(uint8_t dat, uint8_t mode)
 
 // =============== 公共 API ===============
 
-// 反显
 void OLED_ColorTurn(uint8_t i)
 {
     if (i == 0) {
-        OLED_WR_Byte(0xA6, OLED_CMD);  // 正常显示
-    } else {
-        OLED_WR_Byte(0xA7, OLED_CMD);  // 反色显示
+        OLED_WR_Byte(0xA6, OLED_CMD);
+    }
+    if (i == 1) {
+        OLED_WR_Byte(0xA7, OLED_CMD);
     }
 }
 
-// 屏幕旋转
 void OLED_DisplayTurn(uint8_t i)
 {
     if (i == 0) {
         OLED_WR_Byte(0xC8, OLED_CMD);
         OLED_WR_Byte(0xA1, OLED_CMD);
-    } else {
+    }
+    if (i == 1) {
         OLED_WR_Byte(0xC0, OLED_CMD);
         OLED_WR_Byte(0xA0, OLED_CMD);
     }
 }
 
-// 更新显存到屏幕
 void OLED_Refresh(void)
 {
     uint8_t i, n;
+    DBG_INC(5);  // refresh called
     for (i = 0; i < OLED_PAGE; i++) {
-        OLED_WR_Byte(0xB0 + i, OLED_CMD);  // 设置页地址
-        OLED_WR_Byte(0x00, OLED_CMD);        // 列低4位
-        OLED_WR_Byte(0x10, OLED_CMD);        // 列高4位
+        OLED_WR_Byte(0xB0 + i, OLED_CMD);
+        OLED_WR_Byte(0x00, OLED_CMD);
+        OLED_WR_Byte(0x10, OLED_CMD);
         I2C_Start();
-        Send_Byte(0x78);
+        Send_Byte(OLED_I2C_ADDR);
         I2C_WaitAck();
         Send_Byte(0x40);
         I2C_WaitAck();
@@ -149,9 +161,9 @@ void OLED_Refresh(void)
         }
         I2C_Stop();
     }
+    DBG_INC(6);  // refresh complete
 }
 
-// 清屏
 void OLED_Clear(void)
 {
     uint8_t i, n;
@@ -160,10 +172,10 @@ void OLED_Clear(void)
             OLED_GRAM[n][i] = 0;
         }
     }
+    DBG_INC(4);  // clear done
     OLED_Refresh();
 }
 
-// 画点
 void OLED_DrawPoint(uint8_t x, uint8_t y, uint8_t t)
 {
     uint8_t i, m, n;
@@ -179,56 +191,73 @@ void OLED_DrawPoint(uint8_t x, uint8_t y, uint8_t t)
     }
 }
 
-// OLED 初始化
+// =============== 初始化 ===============
 void OLED_Init(void)
 {
+    DBG_INC(0);  // init_enter
+
+    // 关闭 I2C1 外设，避免 PB6/PB7 被复用为 I2C1 功能
+    // main.c 里 MX_I2C1_Init() 配置了 PB6/PB7 为 I2C1_SCL/SDA，
+    // 必须在 OLED_Init 之前关闭 I2C1，才能让软件 I2C 正常工作
+    __HAL_RCC_I2C1_CLK_ENABLE();
+    I2C1->CR1 |= I2C_CR1_SWRST;
+    I2C1->CR1 &= ~I2C_CR1_SWRST;
+    I2C1->CR1 = 0;
+    I2C1->CR2 = 0;
+    // 将 PB6/PB7 恢复为普通 GPIO（取消复用）
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-    // 1. 使能 GPIO 时钟并初始化 PB6/PB7 为开漏输出
+    // 配置 PB6/PB7 为开漏输出，速度 50MHz（对照例程）
+    // 开漏模式：SDA/SCL 总线需要能被别人拉低，必须用 OD
     __HAL_RCC_GPIOB_CLK_ENABLE();
     GPIO_InitStruct.Pin   = GPIO_PIN_6 | GPIO_PIN_7;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;  // 开漏！不能换成 PP
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6 | GPIO_PIN_7, GPIO_PIN_SET);
 
-    // 2. 等待 OLED 上电稳定
-    HAL_Delay(200);
+    DBG_INC(1);  // gpio_ok
 
-    // 3. SSD1306 初始化序列（逐条照抄例程）
+    // 等待 OLED 上电稳定（1000ms确保SSD1306内部POR完成）
+    HAL_Delay(1000);
+
+    // SSD1306 初始化序列（严格对照例程）
     OLED_WR_Byte(0xAE, OLED_CMD);  // 关闭显示
-    OLED_WR_Byte(0x00, OLED_CMD);  // 设置低列地址
-    OLED_WR_Byte(0x10, OLED_CMD);  // 设置高列地址
-    OLED_WR_Byte(0x00, OLED_CMD);  // 设置显示起始行
-    OLED_WR_Byte(0xB0, OLED_CMD);  // 设置页地址
-    OLED_WR_Byte(0x81, OLED_CMD);
-    OLED_WR_Byte(0xff, OLED_CMD);  // 对比度（最大）
+    DBG_INC(2);  // cmd_AE sent
+
+    OLED_WR_Byte(0x00, OLED_CMD);  // 列低地址
+    OLED_WR_Byte(0x10, OLED_CMD);  // 列高地址
+    OLED_WR_Byte(0x00, OLED_CMD);  // 起始行
+    OLED_WR_Byte(0xB0, OLED_CMD);  // 页地址
+    OLED_WR_Byte(0x81, OLED_CMD);  // 对比度
+    OLED_WR_Byte(0xff, OLED_CMD);  // 最大
     OLED_WR_Byte(0xA1, OLED_CMD);  // 段重映射
-    OLED_WR_Byte(0xA6, OLED_CMD);  // 正常/反色
-    OLED_WR_Byte(0xA8, OLED_CMD);
-    OLED_WR_Byte(0x1F, OLED_CMD);  // 占空比 1/32（0.91寸）
-    OLED_WR_Byte(0xC8, OLED_CMD);  // 扫描方向
-    OLED_WR_Byte(0xD3, OLED_CMD);
-    OLED_WR_Byte(0x00, OLED_CMD);  // 显示偏移
-    OLED_WR_Byte(0xD5, OLED_CMD);
-    OLED_WR_Byte(0x80, OLED_CMD);  // 时钟分频
-    OLED_WR_Byte(0xD9, OLED_CMD);
-    OLED_WR_Byte(0x1f, OLED_CMD);  // 预充电周期
-    OLED_WR_Byte(0xDA, OLED_CMD);
-    OLED_WR_Byte(0x00, OLED_CMD);  // COM引脚配置
-    OLED_WR_Byte(0xdb, OLED_CMD);
-    OLED_WR_Byte(0x40, OLED_CMD);  // VCOMH等级
-    OLED_WR_Byte(0x8d, OLED_CMD);
-    OLED_WR_Byte(0x14, OLED_CMD);  // 充电泵使能
+    OLED_WR_Byte(0xA6, OLED_CMD);  // 正常显示
+    OLED_WR_Byte(0xA8, OLED_CMD);  // 多路比率
+    OLED_WR_Byte(0x1F, OLED_CMD);  // 1/32 (0.91寸)
+    OLED_WR_Byte(0xC8, OLED_CMD);  // COM扫描方向
+    OLED_WR_Byte(0xD3, OLED_CMD);  // 显示偏移
+    OLED_WR_Byte(0x00, OLED_CMD);
+    OLED_WR_Byte(0xD5, OLED_CMD);  // 时钟分频
+    OLED_WR_Byte(0x80, OLED_CMD);
+    OLED_WR_Byte(0xD9, OLED_CMD);  // 预充电
+    OLED_WR_Byte(0x1f, OLED_CMD);
+    OLED_WR_Byte(0xDA, OLED_CMD);  // COM引脚
+    OLED_WR_Byte(0x00, OLED_CMD);
+    OLED_WR_Byte(0xdb, OLED_CMD);  // VCOMH
+    OLED_WR_Byte(0x40, OLED_CMD);
+    OLED_WR_Byte(0x8d, OLED_CMD);  // 充电泵
+    OLED_WR_Byte(0x14, OLED_CMD);
+
     OLED_Clear();
     OLED_WR_Byte(0xAF, OLED_CMD);  // 开启显示
-    // 初始化 GRAM 为 0，防止随机数据导致花屏
-    memset(OLED_GRAM, 0, sizeof(OLED_GRAM));
+    DBG_INC(3);  // cmd_AF sent
+
+    DBG_INC(9);  // init_exit
 }
 
-// =============== 显示函数（简化版） ===============
+// =============== 显示函数 ===============
 
-// 8x16 ASCII 点阵
 extern const uint8_t OLED_F8X16[];
 
 void OLED_ShowChar(uint8_t x, uint8_t y, char chr)
@@ -290,26 +319,29 @@ void OLED_ShowAssetCode(uint8_t x, uint8_t y, const char *code)
     OLED_ShowString(x, y, code);
 }
 
-// =============== 确认界面 ===============
+// =============== 界面 ===============
 
 void OLED_ShowConfirmUI(const char *action, const char *asset_code, uint8_t sec)
 {
+    DBG_INC(10);  // show_confirm called
     OLED_Clear();
     OLED_ShowLine(0, "=== Confirm ===");
     char line2[24];
-    if (strcmp(action, "IN") == 0)      snprintf(line2, sizeof(line2), ">>> IN <<<");
+    if (strcmp(action, "IN") == 0)       snprintf(line2, sizeof(line2), ">>> IN <<<");
     else if (strcmp(action, "OUT") == 0) snprintf(line2, sizeof(line2), ">>> OUT <<<");
     else if (strcmp(action, "RET") == 0) snprintf(line2, sizeof(line2), ">>> RET <<<");
-    else                                  snprintf(line2, sizeof(line2), ">>> %s <<<", action);
+    else                                 snprintf(line2, sizeof(line2), ">>> %s <<<", action);
     OLED_ShowLine(1, line2);
     char line3[24];
     snprintf(line3, sizeof(line3), "%s T:%ds", asset_code, sec);
     OLED_ShowLine(2, line3);
     OLED_Refresh();
+    DBG_INC(11);  // show_confirm done
 }
 
 void OLED_ShowResultUI(const char *result)
 {
+    DBG_INC(12);  // show_result called
     OLED_Clear();
     if (strcmp(result, "OK") == 0) {
         OLED_ShowLine(1, "==== [OK] ====");
@@ -319,4 +351,5 @@ void OLED_ShowResultUI(const char *result)
         OLED_ShowLine(1, "== [TIMEOUT] ==");
     }
     OLED_Refresh();
+    DBG_INC(13);  // show_result done
 }
